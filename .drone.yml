@@ -1,0 +1,94 @@
+kind: pipeline
+name: drone-test
+steps:
+  # api unit test
+  - name: ststus-test
+    image: node:11
+    depends_on: [clone]
+    commands:
+      - cd ./api/
+      - npm install --registry https://registry.npm.taobao.org
+      - cd ./dgc_sdk && npm install --production
+      - cd .. && npm run test
+  # web lint
+  - name: web-lint
+    image: node:10.15.1
+    depends_on: [clone]
+    commands:
+      - cd ./web
+      - npm install --registry https://registry.npm.taobao.org
+      - npm run lint
+trigger:
+  branch:
+    - master
+  event:
+    - pull_request
+    - push
+    
+    
+    
+kind: pipeline
+name: 打包测试
+​
+steps:
+- name: Maven编译
+  image: maven
+  volumes:
+  - name: cache
+    path: /root/.m2
+  commands:
+    - mvn clean install
+​
+- name: scp传递jar包
+  image: appleboy/drone-scp
+  settings:
+    host:
+      - *****
+    username: root
+    password:
+      from_secret: ftp_password
+    port: 22
+    command_timeout: 2m
+    target: ****
+    source:
+      - /drone/src/target/*.jar
+    rm: true
+​
+- name: ssh commands
+  image: appleboy/drone-ssh
+  settings:
+    host: ****
+    username: ****
+    password: 
+      from_secret: ftp_password
+    port: 22
+    script:
+      - echo ====暂停容器开始=======
+      - docker stop `docker ps -a| grep *** | awk '{print $1}' `
+      - docker rm -f `docker ps -a| grep *** | awk '{print $1}' `
+      - echo ====开始部署=======
+      - cd /usr/local/ywb/interview
+      - docker build -t *** .
+      - docker run ...
+      - echo ====部署成功======
+
+- name: 钉钉通知
+  image: guoxudongdocker/drone-dingtalk 
+  settings:
+    token: 
+      from_secret: dingtalk_token
+    type: markdown
+    message_color: true
+    message_pic: true
+    sha_link: true
+  when:
+    status: [failure, success]
+
+volumes:
+- name: cache
+  host:
+    path: /tmp/cache/.m2
+
+trigger:
+  branch:
+  - master
